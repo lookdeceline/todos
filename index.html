@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>오늘 할 일</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 48px 16px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      width: 100%;
+      max-width: 480px;
+      padding: 32px;
+    }
+
+    /* ── Setup screen ── */
+    #setup { display: none; flex-direction: column; gap: 16px; }
+    #setup h2 { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+    #setup p { font-size: 14px; color: #666; line-height: 1.5; }
+    #setup input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: monospace;
+      outline: none;
+    }
+    #setup input:focus { border-color: #4caf82; }
+    #setup button {
+      padding: 11px;
+      background: #4caf82;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #setup button:hover { background: #3d9e72; }
+    #setup-error { font-size: 13px; color: #e05555; display: none; }
+
+    /* ── Main screen ── */
+    #main { display: none; flex-direction: column; }
+    .date { font-size: 13px; color: #999; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+    .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; }
+    .status { font-size: 12px; color: #bbb; display: flex; align-items: center; gap: 5px; }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #ccc;
+      transition: background 0.3s;
+    }
+    .dot.saving { background: #f5a623; }
+    .dot.saved  { background: #4caf82; }
+    .dot.error  { background: #e05555; }
+
+    .todo-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #fafafa;
+      border: 1px solid #efefef;
+      transition: background 0.15s;
+      position: relative;
+    }
+    .todo-item:hover { background: #f4f4f2; }
+    .todo-item:hover .delete-btn { opacity: 1; }
+    .todo-item.done .label { text-decoration: line-through; color: #aaa; }
+
+    .checkbox {
+      width: 20px; height: 20px;
+      border-radius: 6px;
+      border: 2px solid #ccc;
+      flex-shrink: 0;
+      margin-top: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .todo-item.done .checkbox { background: #4caf82; border-color: #4caf82; }
+    .todo-item.done .checkbox::after {
+      content: "";
+      width: 5px; height: 9px;
+      border: 2px solid #fff;
+      border-top: none; border-left: none;
+      transform: rotate(45deg) translateY(-1px);
+      display: block;
+    }
+
+    .label {
+      font-size: 15px; color: #222; line-height: 1.5;
+      flex: 1; outline: none; border-radius: 4px; padding: 0 2px;
+      word-break: break-word; cursor: text;
+      transition: background 0.1s;
+    }
+    .label:focus { background: #fff7d6; box-shadow: 0 0 0 2px #f5c842; }
+    .label[contenteditable="true"]:empty::before { content: "할 일을 입력하세요..."; color: #bbb; }
+
+    .delete-btn {
+      opacity: 0;
+      background: none; border: none; cursor: pointer;
+      color: #ccc; font-size: 16px; padding: 0 2px; margin-top: 2px;
+      transition: color 0.15s, opacity 0.15s; flex-shrink: 0; line-height: 1;
+    }
+    .delete-btn:hover { color: #e05555; }
+
+    .add-btn {
+      margin-top: 14px; width: 100%; padding: 10px;
+      border: 2px dashed #ddd; border-radius: 10px;
+      background: none; color: #aaa; font-size: 14px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .add-btn:hover { border-color: #4caf82; color: #4caf82; }
+
+    .footer {
+      margin-top: 24px; font-size: 11px; color: #ccc; text-align: center;
+      display: flex; justify-content: center; align-items: center; gap: 8px;
+    }
+    .logout-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 11px; color: #ddd; padding: 0;
+      transition: color 0.15s;
+    }
+    .logout-btn:hover { color: #e05555; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- Setup -->
+  <div id="setup">
+    <h2>연결하기</h2>
+    <p>GitHub Personal Access Token (<code>gist</code> scope)을 입력하면 모든 기기에서 할 일이 동기화됩니다.</p>
+    <input type="password" id="token-input" placeholder="ghp_..." autocomplete="off" />
+    <div id="setup-error">토큰을 확인할 수 없어요. 다시 확인해 주세요.</div>
+    <button id="connect-btn">연결</button>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <div class="date" id="date-label"></div>
+    <div class="header-row">
+      <h1>오늘 할 일</h1>
+      <div class="status">
+        <div class="dot" id="dot"></div>
+        <span id="status-text">loading</span>
+      </div>
+    </div>
+    <ul class="todo-list" id="todo-list"></ul>
+    <button class="add-btn" id="add-btn">+ 할 일 추가</button>
+    <div class="footer">
+      <span>synced to GitHub Gist</span>
+      <span>·</span>
+      <button class="logout-btn" id="logout-btn" title="disconnect token">disconnect</button>
+    </div>
+  </div>
+
+</div>
+<script>
+  const GIST_ID   = 'b911cbdbdd917969822feeb588ebc21d';
+  const GIST_FILE = 'todos.json';
+  const TOKEN_KEY = 'gh_todo_token';
+
+  let todos   = [];
+  let nextId  = 100;
+  let token   = '';
+  let saveTimer = null;
+
+  // ── Date label ──
+  const today = new Date();
+  document.getElementById('date-label').textContent =
+    today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  // ── Status helpers ──
+  const dot        = document.getElementById('dot');
+  const statusText = document.getElementById('status-text');
+  function setStatus(state, msg) {
+    dot.className = 'dot ' + state;
+    statusText.textContent = msg || (state === 'saving' ? '저장 중…' : state === 'saved' ? '저장됨' : '오류');
+  }
+
+  // ── GitHub Gist API ──
+  async function gistGet() {
+    const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    return JSON.parse(data.files[GIST_FILE].content);
+  }
+
+  async function gistPut(todos) {
+    const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+      method: 'PATCH',
+      headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(todos, null, 2) } } })
+    });
+    if (!r.ok) throw new Error(r.status);
+  }
+
+  // ── Load / save ──
+  async function loadTodos() {
+    setStatus('saving', 'loading…');
+    try {
+      todos  = await gistGet();
+      nextId = todos.length ? Math.max(...todos.map(t => t.id)) + 1 : 1;
+      setStatus('saved');
+      render();
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      setStatus('saving');
+      try { await gistPut(todos); setStatus('saved'); }
+      catch { setStatus('error'); }
+    }, 800);
+  }
+
+  // ── Render ──
+  function makeItem(todo) {
+    const li = document.createElement('li');
+    li.className = 'todo-item' + (todo.done ? ' done' : '');
+
+    const box = document.createElement('div');
+    box.className = 'checkbox';
+    box.addEventListener('click', () => { todo.done = !todo.done; render(); scheduleSave(); });
+
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.contentEditable = 'true';
+    label.textContent = todo.text;
+    label.addEventListener('input', () => { todo.text = label.textContent; scheduleSave(); });
+    label.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); label.blur(); addTodo(); }
+      if (e.key === 'Escape') label.blur();
+    });
+
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.textContent = '×';
+    del.addEventListener('click', () => { todos = todos.filter(t => t.id !== todo.id); render(); scheduleSave(); });
+
+    li.appendChild(box); li.appendChild(label); li.appendChild(del);
+    return li;
+  }
+
+  function render() {
+    const list = document.getElementById('todo-list');
+    list.innerHTML = '';
+    todos.forEach(t => list.appendChild(makeItem(t)));
+  }
+
+  function addTodo() {
+    const t = { id: nextId++, text: '', done: false };
+    todos.push(t);
+    render();
+    document.querySelectorAll('.todo-item')[todos.length - 1]?.querySelector('.label')?.focus();
+  }
+
+  document.getElementById('add-btn').addEventListener('click', addTodo);
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    localStorage.removeItem(TOKEN_KEY);
+    location.reload();
+  });
+
+  // ── Auth flow ──
+  function showSetup() {
+    document.getElementById('setup').style.display = 'flex';
+    document.getElementById('main').style.display  = 'none';
+  }
+  function showMain() {
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('main').style.display  = 'flex';
+  }
+
+  document.getElementById('connect-btn').addEventListener('click', async () => {
+    const val = document.getElementById('token-input').value.trim();
+    if (!val) return;
+    document.getElementById('connect-btn').textContent = '확인 중…';
+    document.getElementById('setup-error').style.display = 'none';
+    try {
+      const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+        headers: { Authorization: `token ${val}` }
+      });
+      if (!r.ok) throw new Error();
+      token = val;
+      localStorage.setItem(TOKEN_KEY, token);
+      showMain();
+      loadTodos();
+    } catch {
+      document.getElementById('setup-error').style.display = 'block';
+      document.getElementById('connect-btn').textContent = '연결';
+    }
+  });
+
+  // ── Boot ──
+  token = localStorage.getItem(TOKEN_KEY) || '';
+  if (token) { showMain(); loadTodos(); }
+  else showSetup();
+</script>
+</body>
+</html>
